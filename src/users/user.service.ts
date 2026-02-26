@@ -12,17 +12,17 @@ import { PasswordValidator } from '../common/validators/password.validator';
 
 /**
  * UserService
- * 
+ *
  * Handles user account management operations including:
  * - User registration with password hashing
  * - User lookup by email or wallet address
  * - Password updates with validation
  * - Email verification
  * - Profile management
- * 
+ *
  * All passwords are hashed using bcrypt with configurable salt rounds.
  * Ensures data integrity through unique constraint validation.
- * 
+ *
  * @class UserService
  * @injectable
  */
@@ -35,19 +35,19 @@ export class UserService {
 
   /**
    * Create a new user account
-   * 
+   *
    * Performs comprehensive validation:
    * - Password strength (minimum 8 chars, mixed case, numbers, special chars)
    * - Email and wallet address uniqueness
-   * 
+   *
    * Passwords are hashed using bcrypt with saltRounds from config (default: 12).
    * Default role is 'USER' - can be elevated by administrators.
-   * 
+   *
    * @param {CreateUserDto} createUserDto - User data (email, password, firstName, lastName, walletAddress)
    * @returns {Promise<User>} Created user object (password removed from response)
    * @throws {BadRequestException} If password doesn't meet strength requirements
    * @throws {ConflictException} If email or wallet already registered
-   * 
+   *
    * @example
    * ```typescript
    * const user = await userService.create({
@@ -108,10 +108,10 @@ export class UserService {
 
   /**
    * Find user by email address
-   * 
+   *
    * @param {string} email - Email address to search for
    * @returns {Promise<User>} User object if found, null otherwise
-   * 
+   *
    * @example
    * ```typescript
    * const user = await userService.findByEmail('user@example.com');
@@ -125,11 +125,11 @@ export class UserService {
 
   /**
    * Find user by ID
-   * 
+   *
    * @param {string} id - User ID to search for
    * @returns {Promise<User>} User object
    * @throws {NotFoundException} If user doesn't exist
-   * 
+   *
    * @example
    * ```typescript
    * const user = await userService.findById('clx123abc');
@@ -149,12 +149,12 @@ export class UserService {
 
   /**
    * Find user by blockchain wallet address
-   * 
+   *
    * Supports Web3 authentication without traditional email/password.
-   * 
+   *
    * @param {string} walletAddress - Blockchain wallet address (e.g., 0x...)
    * @returns {Promise<User>} User object if found, null otherwise
-   * 
+   *
    * @example
    * ```typescript
    * const user = await userService.findByWalletAddress('0x742d35Cc6634C0532925a3b844Bc59e4e7aa6cA6');
@@ -168,16 +168,16 @@ export class UserService {
 
   /**
    * Update user password with validation
-   * 
+   *
    * Validates new password strength before updating.
    * Uses bcrypt for secure hashing.
-   * 
+   *
    * @param {string} userId - ID of user whose password to update
    * @param {string} newPassword - New password (must pass strength validation)
    * @returns {Promise<User>} Updated user object
    * @throws {BadRequestException} If password doesn't meet strength requirements
    * @throws {NotFoundException} If user doesn't exist
-   * 
+   *
    * @example
    * ```typescript
    * await userService.updatePassword(userId, 'NewSecurePass123!');
@@ -204,14 +204,14 @@ export class UserService {
 
   /**
    * Mark user email as verified
-   * 
+   *
    * Called after successful email verification.
    * Sets isVerified flag to true.
-   * 
+   *
    * @param {string} userId - ID of user to verify
    * @returns {Promise<User>} Updated user object
    * @throws {NotFoundException} If user doesn't exist
-   * 
+   *
    * @example
    * ```typescript
    * await userService.verifyUser(userId);
@@ -227,10 +227,10 @@ export class UserService {
 
   /**
    * Update user profile information
-   * 
+   *
    * Supports partial updates for email, wallet address, and active status.
    * Validates uniqueness of new email and wallet address.
-   * 
+   *
    * @param {string} id - User ID to update
    * @param {Object} data - Data to update
    * @param {string} [data.email] - New email address
@@ -239,7 +239,7 @@ export class UserService {
    * @returns {Promise<User>} Updated user object
    * @throws {ConflictException} If email or wallet already taken by another user
    * @throws {NotFoundException} If user doesn't exist
-   * 
+   *
    * @example
    * ```typescript
    * await userService.updateUser(userId, {
@@ -281,6 +281,155 @@ export class UserService {
     return this.prisma.user.update({
       where: { id },
       data,
+    });
+  }
+  /**
+   * Update user profile (bio, location, avatar)
+   */
+  async updateProfile(userId: string, profile: { bio?: string; location?: string; avatarUrl?: string }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: profile,
+    });
+  }
+
+  /**
+   * Update user preferences (JSON)
+   */
+  async updatePreferences(userId: string, preferences: any) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { preferences },
+    });
+  }
+
+  /**
+   * Track user activity
+   */
+  async logActivity(userId: string, action: string, metadata?: any) {
+    return this.prisma.userActivity.create({
+      data: { userId, action, metadata },
+    });
+  }
+
+  /**
+   * Get user activity history
+   */
+  async getActivityHistory(userId: string, limit = 50) {
+    return this.prisma.userActivity.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Update user avatar
+   */
+  async updateAvatar(userId: string, avatarUrl: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+    });
+  }
+
+  /**
+   * Search users by name, email, or location
+   */
+  async searchUsers(query: string, limit = 20) {
+    return this.prisma.user.findMany({
+      where: {
+        OR: [
+          { email: { contains: query, mode: 'insensitive' } },
+          { firstName: { contains: query, mode: 'insensitive' } },
+          { lastName: { contains: query, mode: 'insensitive' } },
+          { location: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      take: limit,
+    });
+  }
+
+  /**
+   * Follow another user
+   */
+  async followUser(followerId: string, followingId: string) {
+    if (followerId === followingId) {
+      throw new BadRequestException('Cannot follow yourself');
+    }
+    // Prevent duplicate follows
+    const existing = await this.prisma.userRelationship.findUnique({
+      where: { followerId_followingId: { followerId, followingId } },
+    });
+    if (existing) {
+      return existing;
+    }
+    return this.prisma.userRelationship.create({
+      data: { followerId, followingId },
+    });
+  }
+
+  /**
+   * Unfollow a user
+   */
+  async unfollowUser(followerId: string, followingId: string) {
+    return this.prisma.userRelationship.delete({
+      where: { followerId_followingId: { followerId, followingId } },
+    });
+  }
+
+  /**
+   * List followers of a user
+   */
+  async getFollowers(userId: string, limit = 50) {
+    return this.prisma.userRelationship.findMany({
+      where: { followingId: userId },
+      take: limit,
+      include: { follower: true },
+    });
+  }
+
+  /**
+   * List users a user is following
+   */
+  async getFollowing(userId: string, limit = 50) {
+    return this.prisma.userRelationship.findMany({
+      where: { followerId: userId },
+      take: limit,
+      include: { following: true },
+    });
+  }
+
+  /**
+   * Get user analytics (basic engagement metrics)
+   */
+  async getUserAnalytics(userId: string) {
+    const [loginCount, activityCount, followers, following] = await Promise.all([
+      this.prisma.userActivity.count({ where: { userId, action: 'login' } }),
+      this.prisma.userActivity.count({ where: { userId } }),
+      this.prisma.userRelationship.count({ where: { followingId: userId } }),
+      this.prisma.userRelationship.count({ where: { followerId: userId } }),
+    ]);
+    return { loginCount, activityCount, followers, following };
+  }
+
+  /**
+   * Update privacy settings
+   */
+  async updatePrivacySettings(userId: string, privacySettings: any) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { privacySettings },
+    });
+  }
+
+  /**
+   * Request user data export
+   */
+  async requestDataExport(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { exportRequestedAt: new Date() },
     });
   }
 }

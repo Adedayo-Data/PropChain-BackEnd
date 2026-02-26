@@ -1,10 +1,14 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
+
+// Prisma client generator
 generator client {
   provider = "prisma-client-js"
 }
 
+
+// Database connection configuration
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -12,8 +16,8 @@ datasource db {
 
 model User {
   id            String    @id @default(cuid())
-  email         String    @unique
-  walletAddress String?   @unique @map("wallet_address")
+  email         String    @unique // Unique index for fast user lookup by email
+  walletAddress String?   @unique @map("wallet_address") // Unique index for wallet address
   role          UserRole  @default(USER)
   roleId        String?   @map("role_id")
   password      String?
@@ -21,17 +25,69 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  // Advanced profile fields
+  bio           String?
+  location      String?
+  avatarUrl     String?   @map("avatar_url")
+
+  // Preferences and privacy
+  preferences   Json?
+  privacySettings Json?   @map("privacy_settings")
+  exportRequestedAt DateTime? @map("export_requested_at")
+
+  // Relationships
+  followers     UserRelationship[] @relation("Followers")
+  following     UserRelationship[] @relation("Following")
+
+  // Activity
+  activities    UserActivity[]
+
   properties           Property[]
   receivedTransactions Transaction[] @relation("UserTransactions")
   userRole             Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
   roleChanges          RoleChangeLog[]
   documents            Document[]
 
-  @@index([email])
-  @@index([walletAddress])
-  @@index([role])
-  @@index([createdAt])
+  // Indexes for common query patterns
+  @@index([email]) // For searching users by email
+  @@index([walletAddress]) // For searching users by wallet address
+  @@index([role]) // For filtering users by role
+  @@index([createdAt]) // For sorting/filtering by creation date
+  @@index([isVerified])
+  @@index([location])
   @@map("users")
+// User activity tracking
+model UserActivity {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("user_activities")
+}
+
+// User relationship (followers, connections)
+model UserRelationship {
+  id           String   @id @default(cuid())
+  followerId   String   @map("follower_id")
+  followingId  String   @map("following_id")
+  status       String   @default("active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  follower     User     @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following    User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("user_relationships")
+}
 }
 
 model Property {
@@ -68,12 +124,14 @@ model Property {
   latitude   Float?
   longitude  Float?
 
-
-  @@index([latitude, longitude])
-  @@index([ownerId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([location])
+  // Indexes for geospatial queries and filtering
+  @@index([latitude, longitude]) // For location-based queries
+  @@index([ownerId]) // For filtering properties by owner
+  @@index([status]) // For filtering by property status
+  @@index([createdAt]) // For sorting/filtering by creation date
+  @@index([location]) // For searching/filtering by location
+  // Consider adding an index on price if you often filter/sort by price
+  @@index([price])
   @@map("properties")
 }
 
@@ -90,7 +148,10 @@ model PropertyValuation {
   createdAt       DateTime @default(now())
   
   property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  
+
+  // Index for fast lookup by property and date
+  @@index([propertyId])
+  @@index([valuationDate])
   @@map("property_valuations")
 }
 
@@ -117,17 +178,20 @@ model Transaction {
   platformFee       Decimal?
   disputeReason     String?
 
-    property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   recipient User?     @relation("UserTransactions", fields: [toAddress], references: [walletAddress])
   documents Document[]
 
-  @@index([buyerId])
-  @@index([sellerId])
-  @@index([fromAddress])
-  @@index([toAddress])
-  @@index([status])
-  @@index([createdAt])
-  @@index([propertyId])
+  // Indexes for common transaction queries
+  @@index([buyerId]) // For filtering by buyer
+  @@index([sellerId]) // For filtering by seller
+  @@index([fromAddress]) // For filtering by sender
+  @@index([toAddress]) // For filtering by recipient
+  @@index([status]) // For filtering by transaction status
+  @@index([createdAt]) // For sorting/filtering by creation date
+  @@index([propertyId]) // For filtering by property
+  // Consider adding an index on txHash if you often search by transaction hash
+  @@index([txHash])
   @@map("transactions")
 }
 
